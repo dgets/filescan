@@ -6,34 +6,44 @@
 require 'optparse'
 
 VERBOSE = false
+DEBUGGING = true
 
 #at some point the archive types should be separated into a config file from
 #this script (JSON)
 
 #$archivers = Hash.new
-$archivers = { "{tgz|tar.gz}$" => "/bin/tar ztf" }
+$archivers = { "{tgz|tar.gz}$" => "/bin/tar ztf",
+	       "{tar.bz2}$" => "/bin/tar jtf" }
 
 #so apparently both .length and .size work here
 if (ARGV.length != 2)
     print "filescan.rb usage:\n\tfilescan.rb [target] [location] where [target]"
     print " is the string that\n\tyou're searching for, in the [location].\n"
     exit 1
-else
+elsif (VERBOSE)
     puts "looking for: #{ARGV[0]} in #{ARGV[1]}"
 end
 
 TARGET = ARGV[0]
 LOCATION = ARGV[1]
-$success = false
+ORIGLOC = Dir.pwd
 
-#check_dir(LOCATION)
+$success = false
 
 def check_dir(dirspec)
     ouah = String.new
 
+    if (DEBUGGING)
+	puts "Entering #{dirspec}"
+    end
+    Dir.chdir(dirspec)
+    if (DEBUGGING)
+	puts "Entered #{Dir.pwd}"
+    end
+
     Dir.foreach(dirspec) { |entry|
-	if ((entry == ".") or (entry == ".."))
-	    if (VERBOSE)
+	if ((/^\.$/ =~ entry) or (/^\.\.$/ =~ entry))
+	    if (VERBOSE or DEBUGGING)
 		puts "Skipping: #{dirspec}"
 	    end
 	    next
@@ -45,12 +55,16 @@ def check_dir(dirspec)
 
 	#directory?
 	if (File.directory?(entry))
+	    if (DEBUGGING)
+		puts "Recursing to #{entry}"
+	    end
+
 	    check_dir(entry)
 	    next
 	end
 
 	#match in the present entry?
-	if (/#{TARGET}/ =~ entry)
+	if (entry =~ /#{TARGET}/)
 	    puts "#{entry}"
 	    $success = true
 	    next
@@ -58,7 +72,11 @@ def check_dir(dirspec)
 
 	#is it an archive that we support?
 	$archivers.each { |spec,command|
-	    if (/#{spec}/ =~ entry)
+	    if (DEBUGGING)
+		puts "spec: #{spec}, command: #{command}"
+	    end
+	    if (entry =~ /#{spec}/)
+		puts "Spawning: #{command}"
 		ouah = `#{command} #{spec}`
 	    end
 	    if (VERBOSE)
@@ -66,7 +84,7 @@ def check_dir(dirspec)
 	    end
 
 	    ouah.split("\n") { |line|
-		if (/#{TARGET}/ =~ line)
+		if (line =~ /#{TARGET}/)
 		    puts "#{line}"
 		    $success = true
 		end
@@ -80,6 +98,8 @@ def check_dir(dirspec)
 end
 
 if (check_dir(LOCATION))
-    puts "Found #{TARGET} under #{LOCATION}\n"
+    puts "Found #{TARGET} under #{LOCATION}"
+else
+    puts "Was unable to find #{TARGET} under #{LOCATION}"
 end
 
